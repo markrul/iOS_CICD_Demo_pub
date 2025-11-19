@@ -1,0 +1,37 @@
+version: 0.2
+
+phases:
+  install:
+    commands:
+      # 更新 Homebrew 并安装必要工具
+      - brew update
+      - brew install xcodegen || echo "xcodegen already installed"
+      - gem install cocoapods --pre || echo "cocoapods already installed"
+      - pod --version
+      
+  pre_build:
+    commands:
+      # 进入项目目录并安装依赖
+      - cd $CODEBUILD_SRC_DIR
+      - cd CICD_iOS
+      - pod install --repo-update
+      
+  build:
+    commands:
+      # 构建项目
+      - xcodebuild -workspace CICD_iOS.xcworkspace -scheme CICD_iOS -configuration Release -sdk iphoneos -derivedDataPath build
+      - set -o pipefail && xcodebuild -workspace CICD_iOS.xcworkspace -scheme CICD_iOS -configuration Release -sdk iphoneos -only-testing:CICD_iOS test | xcpretty -s
+
+  post_build:
+    commands:
+      # 构建后的操作
+      - echo "Build completed on `date`"
+      # 示例：将构建产物上传到 S3
+      # - aws s3 cp ./build/Build/Products/Release-iphoneos/YourApp.ipa s3://your-bucket/path/
+      
+artifacts:
+  files:
+    # 指定要保留的构建产物
+    - '**/*'
+  discard-paths: no
+  base-directory: 'build/Build/Products/Release-iphoneos'
