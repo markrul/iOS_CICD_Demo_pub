@@ -20,7 +20,7 @@ jobs:
     - name: 设置Xcode版本
       uses: maxim-lobanov/setup-xcode@v1
       with:
-        xcode-version: '14.x'
+        xcode-version: '15.x'
         
     - name: 安装CocoaPods依赖
       run: |
