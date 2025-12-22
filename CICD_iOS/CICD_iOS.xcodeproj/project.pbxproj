@@ -65,15 +65,11 @@
 		};
 		813110C22DD32AF7003FBECE /* CICD_iOSTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-			);
 			path = CICD_iOSTests;
 			sourceTree = "<group>";
 		};
 		813110CC2DD32AF7003FBECE /* CICD_iOSUITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-			);
 			path = CICD_iOSUITests;
 			sourceTree = "<group>";
 		};
@@ -117,7 +113,6 @@
 				30A15EED18ECAF944A36317F /* Pods-CICD_iOSTests.debug.xcconfig */,
 				DDF07C113535B308B3A68FBF /* Pods-CICD_iOSTests.release.xcconfig */,
 			);
-			name = Pods;
 			path = Pods;
 			sourceTree = "<group>";
 		};
@@ -569,6 +564,7 @@
 				MTL_FAST_MATH = YES;
 				SDKROOT = iphoneos;
 				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				VALIDATE_PRODUCT = YES;
 			};
 			name = Release;
