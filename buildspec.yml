@@ -27,17 +27,6 @@ jobs:
         cd CICD_iOS
         pod install
         
-    - name: 构建和测试
-      run: |
-        cd CICD_iOS
-        xcodebuild test -workspace CICD_iOS.xcworkspace -scheme CICD_iOS -destination 'platform=iOS Simulator,name=iPhone 17,OS=26.0.1'
-
-    - name: 重置iOS模拟器
-      run: |
-        xcrun simctl list devices available
-        xcrun simctl shutdown all
-        xcrun simctl erase all
-    
     - name: 运行UI测试（带超时）
       run: |
         cd CICD_iOS
