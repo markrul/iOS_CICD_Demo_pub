@@ -39,8 +39,10 @@ jobs:
         rm -rf ~/Library/Developer/Xcode/DerivedData/*
         xcrun simctl shutdown all  # 先关闭所有模拟器
         xcrun simctl erase all     # 清空模拟器数据
+        # 启动并准备测试用模拟器（避免UI测试启动超时）
+        xcrun simctl boot "iPhone 16 (iOS 18.0)" || true
 
-    - name: 主工程构建+单元测试（禁用签名）  # ✅ 修正缩进：和其他step同级
+    - name: 主工程构建+基础测试（禁用签名）
       run: |
         cd CICD_iOS
         # 自动匹配最新可用模拟器，兼容GitHub Actions环境
@@ -58,6 +60,53 @@ jobs:
         if grep -E "Test Failed|Build failed|error:|^    ❌" main_test.log; then
           echo "主工程测试失败："
           cat main_test.log
+          exit 1
+        fi
+
+    - name: 执行单元测试（CICD_iOSTests）
+      run: |
+        cd CICD_iOS
+        # 单独执行UT测试Scheme，聚焦单元测试结果
+        xcodebuild test \
+          -workspace CICD_iOS.xcworkspace \
+          -scheme CICD_iOSTests \
+          -destination 'platform=iOS Simulator,name=iPhone 16,OS=latest' \
+          -configuration Debug \
+          CODE_SIGN_IDENTITY="-" \
+          CODE_SIGNING_REQUIRED=NO \
+          CODE_SIGNING_ALLOWED=NO \
+          ENABLE_TESTABILITY=YES \
+          -enableCodeCoverage YES 2>&1 | tee ut_test.log
+        
+        # 检测UT测试失败
+        if grep -E "Test Failed|Build failed|error:|^    ❌" ut_test.log; then
+          echo "单元测试（CICD_iOSTests）失败："
+          cat ut_test.log
+          exit 1
+        fi
+
+    - name: 执行UI测试（CICD_iOSUITests）
+      run: |
+        cd CICD_iOS
+        # UI测试专属配置：禁用动画、延长超时、单例执行
+        xcodebuild test \
+          -workspace CICD_iOS.xcworkspace \
+          -scheme CICD_iOSUITests \
+          -destination 'platform=iOS Simulator,name=iPhone 16,OS=latest' \
+          -configuration Debug \
+          CODE_SIGN_IDENTITY="-" \
+          CODE_SIGNING_REQUIRED=NO \
+          CODE_SIGNING_ALLOWED=NO \
+          ENABLE_TESTABILITY=YES \
+          -enableCodeCoverage YES \
+          -test-iterations 1 \
+          -maximum-test-execution-time-allowance 180 \
+          XCUI_TESTS_DISABLE_ANIMATIONS=YES 2>&1 | tee ui_test.log
+        
+        # 检测UI测试失败
+        if grep -E "Test Failed|Build failed|error:|^    ❌" ui_test.log; then
+          echo "UI测试（CICD_iOSUITests）失败："
+          cat ui_test.log
           exit 1
         fi
         
@@ -84,11 +133,12 @@ jobs:
         path: CICD_iOS/build_artifacts/
         retention-days: 7  # 产物保留7天，避免占用空间
 
-    - name: 失败时上传日志（调试用）
+    - name: 失败时上传所有测试日志（调试用）
       if: failure()
       uses: actions/upload-artifact@v4
       with:
         name: test-logs
         path: |
           CICD_iOS/main_test.log
+          CICD_iOS/ut_test.log
           CICD_iOS/ui_test.log
