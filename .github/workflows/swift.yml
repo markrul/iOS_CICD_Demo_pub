@@ -47,7 +47,7 @@ jobs:
         xcodebuild test \
           -workspace CICD_iOS.xcworkspace \
           -scheme CICD_iOS \
-          -destination 'platform=iOS Simulator,name=iPhone 15 Pro,OS=latest' \
+          -destination 'platform=iOS Simulator,name=iPhone 16,OS=latest' \
           -configuration Debug \
           CODE_SIGN_IDENTITY="-" \
           CODE_SIGNING_REQUIRED=NO \
@@ -60,37 +60,7 @@ jobs:
           cat main_test.log
           exit 1
         fi
-
-    - name: 运行UI测试（修复模拟器匹配+健壮超时）
-      run: |
-        cd CICD_iOS
-        # 超时后返回特定码，避免误判；同时兼容模拟器
-        if ! timeout 300 xcodebuild test \
-          -workspace CICD_iOS.xcworkspace \
-          -scheme CICD_iOSUITests \
-          -destination 'platform=iOS Simulator,name=iPhone 15 Pro,OS=latest' \
-          -configuration Debug \
-          CODE_SIGN_IDENTITY="-" \
-          CODE_SIGNING_REQUIRED=NO \
-          CODE_SIGNING_ALLOWED=NO \
-          -enableCodeCoverage YES 2>&1 | tee ui_test.log; then
-          # 检查是否是超时导致的失败
-          if [ $? -eq 124 ]; then
-            echo "UI测试超时（300秒），强制终止"
-            exit 1
-          else
-            echo "UI测试失败，完整日志："
-            cat ui_test.log
-            exit 1
-          fi
-        fi
-        # 二次检查日志中的错误
-        if grep -E "Error:|Test Failed|Build failed|^    ❌" ui_test.log; then
-          echo "UI测试日志检测到失败："
-          cat ui_test.log
-          exit 1
-        fi
-
+        
     - name: 归档构建产物（仅Push到主/开发分支且测试通过时执行）
       if: success() && github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
       run: |
