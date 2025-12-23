@@ -40,43 +40,53 @@ jobs:
         xcrun simctl shutdown all  # 先关闭所有模拟器
         xcrun simctl erase all     # 清空模拟器数据
 
-    - name: 主工程构建+单元测试（禁用签名）
+    - name: 主工程构建+单元测试（禁用签名）  # ✅ 修正缩进：和其他step同级
       run: |
         cd CICD_iOS
+        # 自动匹配最新可用模拟器，兼容GitHub Actions环境
         xcodebuild test \
           -workspace CICD_iOS.xcworkspace \
           -scheme CICD_iOS \
-          -destination 'platform=iOS Simulator,name=iPhone 16,OS=18.4' \  # 匹配Xcode 16的iOS 18.x
+          -destination 'platform=iOS Simulator,name=iPhone 15 Pro,OS=latest' \
           -configuration Debug \
-          CODE_SIGN_IDENTITY="-" \          # 模拟器强制无签名
-          CODE_SIGNING_REQUIRED=NO \        # 禁用签名检查
-          CODE_SIGNING_ALLOWED=NO \         # 允许无签名构建
-          ENABLE_TESTABILITY=YES 2>&1 | tee main_test.log  # 输出日志到文件
-
-        # 检查主工程测试是否失败
-        if grep -q "Test Failed" main_test.log; then
+          CODE_SIGN_IDENTITY="-" \
+          CODE_SIGNING_REQUIRED=NO \
+          CODE_SIGNING_ALLOWED=NO \
+          ENABLE_TESTABILITY=YES 2>&1 | tee main_test.log
+        
+        # 精准检查测试失败（排除无关的warning）
+        if grep -E "Test Failed|Build failed|error:|^    ❌" main_test.log; then
           echo "主工程测试失败："
           cat main_test.log
           exit 1
         fi
 
-    - name: 运行UI测试（修复签名+合理超时）
+    - name: 运行UI测试（修复模拟器匹配+健壮超时）
       run: |
         cd CICD_iOS
-        # 给UI Tests单独配置签名，避免卡住
-        timeout 300 xcodebuild test \
+        # 超时后返回特定码，避免误判；同时兼容模拟器
+        if ! timeout 300 xcodebuild test \
           -workspace CICD_iOS.xcworkspace \
           -scheme CICD_iOSUITests \
-          -destination 'platform=iOS Simulator,name=iPhone 16,OS=18.4' \  # 统一模拟器版本
+          -destination 'platform=iOS Simulator,name=iPhone 15 Pro,OS=latest' \
           -configuration Debug \
           CODE_SIGN_IDENTITY="-" \
           CODE_SIGNING_REQUIRED=NO \
           CODE_SIGNING_ALLOWED=NO \
-          -enableCodeCoverage YES 2>&1 | tee ui_test.log
-
-        # 更精准的错误检查（覆盖多种失败场景）
-        if grep -E "Error:|Test Failed|Build failed" ui_test.log; then
-          echo "UI测试失败，完整日志："
+          -enableCodeCoverage YES 2>&1 | tee ui_test.log; then
+          # 检查是否是超时导致的失败
+          if [ $? -eq 124 ]; then
+            echo "UI测试超时（300秒），强制终止"
+            exit 1
+          else
+            echo "UI测试失败，完整日志："
+            cat ui_test.log
+            exit 1
+          fi
+        fi
+        # 二次检查日志中的错误
+        if grep -E "Error:|Test Failed|Build failed|^    ❌" ui_test.log; then
+          echo "UI测试日志检测到失败："
           cat ui_test.log
           exit 1
         fi
