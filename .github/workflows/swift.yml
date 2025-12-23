@@ -99,7 +99,6 @@ jobs:
           CODE_SIGNING_ALLOWED=NO \
           ENABLE_TESTABILITY=YES \
           -enableCodeCoverage YES \
-          -test-iterations 1 \
           -maximum-test-execution-time-allowance 180 \
           XCUI_TESTS_DISABLE_ANIMATIONS=YES 2>&1 | tee ui_test.log
         
