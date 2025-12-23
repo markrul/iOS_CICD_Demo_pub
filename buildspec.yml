@@ -1,37 +1,65 @@
-version: 0.2
+# iOS CI/CD工作流配置文件
+# 用于自动化构建、测试和归档iOS应用程序
 
-phases:
-  install:
-    commands:
-      # 更新 Homebrew 并安装必要工具
-      - brew update
-      - brew install xcodegen || echo "xcodegen already installed"
-      - gem install cocoapods --pre || echo "cocoapods already installed"
-      - pod --version
-      
-  pre_build:
-    commands:
-      # 进入项目目录并安装依赖
-      - cd $CODEBUILD_SRC_DIR
-      - cd CICD_iOS
-      - pod install --repo-update
-      
-  build:
-    commands:
-      # 构建项目
-      - xcodebuild -workspace CICD_iOS.xcworkspace -scheme CICD_iOS -configuration Release -sdk iphoneos -derivedDataPath build
-      - set -o pipefail && xcodebuild -workspace CICD_iOS.xcworkspace -scheme CICD_iOS -configuration Release -sdk iphoneos -only-testing:CICD_iOS test | xcpretty -s
+name: iOS CI/CD
 
-  post_build:
-    commands:
-      # 构建后的操作
-      - echo "Build completed on `date`"
-      # 示例：将构建产物上传到 S3
-      # - aws s3 cp ./build/Build/Products/Release-iphoneos/YourApp.ipa s3://your-bucket/path/
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  build-and-test:
+    runs-on: macos-latest
+    
+    steps:
+    - name: 检出代码
+      uses: actions/checkout@v3
       
-artifacts:
-  files:
-    # 指定要保留的构建产物
-    - '**/*'
-  discard-paths: no
-  base-directory: 'build/Build/Products/Release-iphoneos'
+    - name: 设置Xcode版本
+      uses: maxim-lobanov/setup-xcode@v1
+      with:
+        xcode-version: '16.x'
+        
+    - name: 安装CocoaPods依赖
+      run: |
+        cd CICD_iOS
+        pod install
+        
+    - name: 构建和测试
+      run: |
+        cd CICD_iOS
+        xcodebuild test -workspace CICD_iOS.xcworkspace -scheme CICD_iOS -destination 'platform=iOS Simulator,name=iPhone 17,OS=26.0.1'
+
+    - name: 重置iOS模拟器
+      run: |
+        xcrun simctl list devices available
+        xcrun simctl shutdown all
+        xcrun simctl erase all
+    
+    - name: 运行UI测试（带超时）
+      run: |
+        cd CICD_iOS
+        timeout 300 xcodebuild test -workspace CICD_iOS.xcworkspace -scheme CICD_iOSUITests -destination 'platform=iOS Simulator,name=iPhone 16,OS=18.4' -enableCodeCoverage YES 2>&1 | tee ui_test.log
+        
+        # 检查日志是否有错误
+        if grep -q "Error:" ui_test.log; then
+          echo "UI测试失败，查看完整日志："
+          cat ui_test.log
+          exit 1
+        fi
+        
+    - name: 归档构建产物
+      if: success() && github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
+      run: |
+        cd CICD_iOS
+        mkdir -p build_artifacts
+        xcodebuild -workspace CICD_iOS.xcworkspace -scheme CICD_iOS -configuration Release -archivePath build_artifacts/CICD_iOS archive
+        
+    - name: 上传构建产物
+      if: success() && github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
+      uses: actions/upload-artifact@v4
+      with:
+        name: iOS-Build-Artifacts
+        path: CICD_iOS/build_artifacts/
