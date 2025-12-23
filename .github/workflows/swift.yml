@@ -1,52 +1,67 @@
-# iOS CI/CD工作流配置文件
-# 用于自动化构建、测试和归档iOS应用程序
+#!/bin/bash
 
-name: iOS CI/CD
+# 测试脚本：用于本地验证Xcode构建和测试
+# 确保在推送代码到GitHub之前，所有测试都能正常运行
 
-on:
-  push:
-    branches: [ main, develop ]
-  pull_request:
-    branches: [ main, develop ]
+# 项目路径
+PROJECT_PATH="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/CICD_iOS"
 
-jobs:
-  build-and-test:
-    runs-on: macos-latest
-    
-    steps:
-    - name: 检出代码
-      uses: actions/checkout@v3
-      
-    - name: 设置Xcode版本
-      uses: maxim-lobanov/setup-xcode@v1
-      with:
-        xcode-version: '16.x'
-        
-    - name: 安装CocoaPods依赖
-      run: |
-        cd CICD_iOS
-        pod install
-        
-    - name: 运行单元测试
-      run: |
-        cd CICD_iOS
-        xcodebuild test -workspace CICD_iOS.xcworkspace -scheme CICD_iOSTests -destination 'platform=iOS Simulator,name=iPhone 13,OS=18.2'
-        
-    - name: 运行UI测试
-      run: |
-        cd CICD_iOS
-        xcodebuild test -workspace CICD_iOS.xcworkspace -scheme CICD_iOSUITests -destination 'platform=iOS Simulator,name=iPhone 13,OS=18.2'
-        
-    - name: 归档构建产物
-      if: success() && github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
-      run: |
-        cd CICD_iOS
-        mkdir -p build_artifacts
-        xcodebuild -workspace CICD_iOS.xcworkspace -scheme CICD_iOS -configuration Release -archivePath build_artifacts/CICD_iOS archive
-        
-    - name: 上传构建产物
-      if: success() && github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
-      uses: actions/upload-artifact@v4
-      with:
-        name: iOS-Build-Artifacts
-        path: CICD_iOS/build_artifacts/
+# 输出彩色文本
+GREEN="\033[0;32m"
+RED="\033[0;31m"
+NC="\033[0m" # No Color
+
+# 函数：显示带颜色的消息
+print_message() {
+    echo -e "${GREEN}=== $1 ===${NC}"
+}
+
+print_error() {
+    echo -e "${RED}=== $1 ===${NC}"
+}
+
+# 切换到项目目录
+cd "$PROJECT_PATH" || exit 1
+
+print_message "开始本地测试"
+
+# 检查Xcode版本
+print_message "检查Xcode版本"
+xcodebuild -version
+
+# 安装CocoaPods依赖（如果需要）
+if [ -f "Podfile.lock" ]; then
+    print_message "更新CocoaPods依赖"
+    pod install
+else
+    print_message "未找到Podfile.lock，跳过依赖安装"
+fi
+
+# 运行单元测试
+print_message "运行单元测试"
+xcodebuild test \
+    -workspace CICD_iOS.xcworkspace \
+    -scheme CICD_iOSTests \
+    -destination 'platform=iOS Simulator,name=iPhone 16,OS=18.4' \
+    -configuration Debug
+
+if [ $? -ne 0 ]; then
+    print_error "单元测试失败！"
+    exit 1
+fi
+
+# 运行UI测试
+print_message "运行UI测试"
+xcodebuild test \
+    -workspace CICD_iOS.xcworkspace \
+    -scheme CICD_iOSUITests \
+    -destination 'platform=iOS Simulator,name=iPhone 16,OS=18.4' \
+    -configuration Debug
+
+if [ $? -ne 0 ]; then
+    print_error "UI测试失败！"
+    exit 1
+fi
+
+print_message "所有测试通过！"
+print_message "本地测试完成。您现在可以推送代码到GitHub，GitHub Actions将自动运行相同的测试流程。"
