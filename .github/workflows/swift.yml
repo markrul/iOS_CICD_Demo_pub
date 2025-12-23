@@ -27,10 +27,15 @@ jobs:
         cd CICD_iOS
         pod install
         
-    - name: 构建和测试
+    - name: 运行单元测试
       run: |
         cd CICD_iOS
-        xcodebuild test -workspace CICD_iOS.xcworkspace -scheme CICD_iOS -destination 'platform=iOS Simulator,name=iPhone 17,OS=26.0.1'
+        xcodebuild test -workspace CICD_iOS.xcworkspace -scheme CICD_iOSTests -destination 'platform=iOS Simulator,name=iPhone 13,OS=18.2'
+        
+    - name: 运行UI测试
+      run: |
+        cd CICD_iOS
+        xcodebuild test -workspace CICD_iOS.xcworkspace -scheme CICD_iOSUITests -destination 'platform=iOS Simulator,name=iPhone 13,OS=18.2'
         
     - name: 归档构建产物
       if: success() && github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
